@@ -6,6 +6,9 @@
         <Title>gong-wpf-dragdrop</Title>
         <RootNamespace>GongSolutions.WPF.DragDrop</RootNamespace>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <SignAssembly>false</SignAssembly>
+        <RunAnalyzersDuringLiveAnalysis>false</RunAnalyzersDuringLiveAnalysis>
+        <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
     </PropertyGroup>
     <!-- reference includes -->
     <ItemGroup>
