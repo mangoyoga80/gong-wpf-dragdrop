@@ -144,5 +144,13 @@ namespace GongSolutions.Wpf.DragDrop
         /// Gets the current mode of the underlying routed event.
         /// </summary>
         EventType EventType { get; }
+        /// <summary>
+        /// Gets or sets the class of drop target hint adorner to display in conjunction with <see cref="IHintDropTarget"/> as extended target of <see cref="IDropTarget"/>.
+        /// </summary>
+        /// <remarks>
+        /// The standard drop target Adorner classes are held in the <see cref="DropTargetAdorners"/>
+        /// class.
+        /// </remarks>
+        Type DropTargetHintAdorner { get; set; }
     }
 }

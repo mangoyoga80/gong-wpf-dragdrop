@@ -12,6 +12,9 @@ using GongSolutions.Wpf.DragDrop.Utilities;
 
 namespace GongSolutions.Wpf.DragDrop
 {
+    using System.Collections.Generic;
+    using System.Windows.Documents;
+
     public static partial class DragDrop
     {
         private static void CreateDragAdorner(DropInfo dropInfo)
@@ -280,6 +283,11 @@ namespace GongSolutions.Wpf.DragDrop
             return dropHandler ?? DefaultDropHandler;
         }
 
+        private static IHintDropTarget TryGetHintDropHandler(DropInfo dropInfo, UIElement sender)
+        {
+            return TryGetDropHandler(dropInfo, sender) as IHintDropTarget;
+        }
+
         private static void DragSourceOnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             DoMouseButtonDown(sender, e);
@@ -444,6 +452,7 @@ namespace GongSolutions.Wpf.DragDrop
                             try
                             {
                                 m_DragInProgress = true;
+                                CreateHintAdorners(sender, dragInfo);
                                 var dragDropHandler = dragInfo.DragDropHandler ?? System.Windows.DragDrop.DoDragDrop;
                                 var dragDropEffects = dragDropHandler(dragInfo.VisualSource, dataObject, dragInfo.Effects);
                                 if (dragDropEffects == DragDropEffects.None)
@@ -451,6 +460,7 @@ namespace GongSolutions.Wpf.DragDrop
                                     dragHandler.DragCancelled();
                                 }
                                 dragHandler.DragDropOperationFinished(dragDropEffects, dragInfo);
+                                DestroyHintAdorners();
                             }
                             catch (Exception ex)
                             {
@@ -470,6 +480,114 @@ namespace GongSolutions.Wpf.DragDrop
             }
         }
 
+        private static readonly List<DropTargetHintAdorner> _hintDropTargetAdorners = new List<DropTargetHintAdorner>();
+
+        /// <summary>
+        /// Create hint adorners for all visible and potential drop targets upon drag start.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="dragInfo"></param>
+        private static void CreateHintAdorners(object sender, DragInfo dragInfo)
+        {
+            UIElement excludeElement = null;
+            if (sender is UIElement exclude)
+            {
+                excludeElement = GetIsDropTarget(exclude) ? exclude : exclude.TryGetNextAncestorDropTargetElement();
+            }
+
+            foreach (var potentialTarget in _hintDropZones.ToList())
+            {
+                if(!potentialTarget.TryGetTarget(out var target))
+                {
+                    // Remove dead references
+                    _hintDropZones.Remove(potentialTarget);
+                }
+                if (excludeElement != null && ReferenceEquals(excludeElement, target))
+                {
+                    // Dp not highlight element from sender
+                    continue;
+                }
+
+                AddHintAdorner(dragInfo, target);
+            }
+        }
+
+        private static void AddHintAdorner(DragInfo dragInfo, UIElement target)
+        {
+            DropTargetHintAdorner adorner = null;
+            if (target == null)
+            {
+                return;
+            }
+
+            var hintDropHandler = TryGetHintDropHandler(null, target);
+            if (hintDropHandler == null)
+            {
+                return;
+            }
+
+            var hintAdornerType = hintDropHandler.GetHintAdorner(dragInfo);
+            if (hintAdornerType == null)
+            {
+                return;
+            }
+            var adornedElement = GetAdornedElement(target);
+            
+            if (!hintAdornerType.IsInstanceOfType(typeof(DropTargetHintAdorner)) && adornedElement.IsVisible)
+            {
+                adorner = DropTargetHintAdorner.Create(hintAdornerType, adornedElement);
+            }
+            if (adorner != null)
+            {
+                _hintDropTargetAdorners.Add(adorner);
+            }
+        }
+
+        private static void RemoveHintAdorner(UIElement element)
+        {
+            var adornedElement = GetAdornedElement(element);
+            if (adornedElement == null)
+            {
+                return;
+            }
+
+            var adorner = AdornerLayer.GetAdornerLayer(adornedElement)?
+                                      .GetAdorners(adornedElement)?
+                                      .OfType<DropTargetHintAdorner>()
+                                      .FirstOrDefault();
+            adorner?.Detatch();
+            _hintDropTargetAdorners.Remove(adorner);
+        }
+
+        private static UIElement GetAdornedElement(UIElement itemsControl)
+        {
+            UIElement adornedElement;
+            if (itemsControl is TabControl)
+            {
+                adornedElement = itemsControl.GetVisualDescendent<TabPanel>();
+            }
+            else if (itemsControl is ItemsControl)
+            {
+                adornedElement = itemsControl.GetVisualDescendent<ScrollContentPresenter>() as UIElement ?? itemsControl.GetVisualDescendent<ItemsPresenter>() as UIElement ?? itemsControl;
+            }
+            else
+            {
+                adornedElement = itemsControl;
+            }
+
+            return adornedElement;
+        }
+
+        private static void DestroyHintAdorners()
+        {
+            var adorners = _hintDropTargetAdorners.ToList();
+            _hintDropTargetAdorners.Clear();
+            foreach (var hintAdorner in adorners)
+            {
+                hintAdorner.Detatch();
+            }
+        }
+
         private static void DragSourceOnQueryContinueDrag(object sender, QueryContinueDragEventArgs e)
         {
             if (e.Action == DragAction.Cancel || e.EscapePressed)
@@ -483,12 +601,25 @@ namespace GongSolutions.Wpf.DragDrop
 
         private static void DropTargetOnDragEnter(object sender, DragEventArgs e)
         {
+            OnDropTargetEnter(sender, e);
             DropTargetOnDragOver(sender, e, EventType.Bubbled);
         }
 
         private static void DropTargetOnPreviewDragEnter(object sender, DragEventArgs e)
         {
+            OnDropTargetEnter(sender, e);
             DropTargetOnDragOver(sender, e, EventType.Tunneled);
+        }
+        private static void OnDropTargetEnter(object sender, DragEventArgs e)
+        {
+            var element = sender as UIElement;
+            var dropHandler = TryGetHintDropHandler(null, element);
+            if(dropHandler == null)
+            {
+                return;
+            }
+
+            RemoveHintAdorner(element);
         }
 
         private static void DropTargetOnDragLeave(object sender, DragEventArgs e)
@@ -496,6 +627,11 @@ namespace GongSolutions.Wpf.DragDrop
             DragAdorner = null;
             EffectAdorner = null;
             DropTargetAdorner = null;
+            if (TryGetHintDropHandler(null, sender as UIElement) == null)
+            {
+                return;
+            }
+            AddHintAdorner(m_DragInfo, sender as UIElement);
         }
 
         private static void DropTargetOnDragOver(object sender, DragEventArgs e)
@@ -574,7 +710,7 @@ namespace GongSolutions.Wpf.DragDrop
                         var adornerBrush = GetDropTargetAdornerBrush(dropInfo.VisualTarget);
                         if (adornerBrush != null)
                         {
-                            adorner.Pen.Brush = adornerBrush;
+                            adorner.Pen.SetCurrentValue(Pen.BrushProperty, adornerBrush);
                         }
                         adorner.DropInfo = dropInfo;
                         adorner.InvalidateVisual();

@@ -5,6 +5,9 @@ using GongSolutions.Wpf.DragDrop;
 
 namespace Showcase.WPF.DragDrop.Models
 {
+    using System.Collections.Generic;
+    using System.Linq;
+
     public class SampleData
     {
         public SampleData()
@@ -16,6 +19,9 @@ namespace Showcase.WPF.DragDrop.Models
                 this.FilterCollection1.Add(new ItemModel(n + 1));
                 this.ClonableCollection1.Add(new ClonableItemModel(n + 1));
                 this.DataGridCollection1.Add(new DataGridRowModel());
+                this.GiftCollection.Add(new GiftItemModel(n));
+                this.GiftRecipientCollection.Add(new RecipientItemModel(n));
+
             }
             for (var n = 0; n < 10; ++n)
             {
@@ -53,6 +59,10 @@ namespace Showcase.WPF.DragDrop.Models
             }
             this.TabItemCollection2.Add(new TabItemModel(1));
         }
+
+        public ObservableCollection<GiftItemModel> GiftCollection { get; set; } = new ObservableCollection<GiftItemModel>();
+        public ObservableCollection<RecipientItemModel> GiftRecipientCollection { get; set; } = new ObservableCollection<RecipientItemModel>();
+
 
         public ObservableCollection<SerializableItemModel> SerializableCollection1 { get; set; } = new ObservableCollection<SerializableItemModel>();
 
@@ -101,5 +111,7 @@ namespace Showcase.WPF.DragDrop.Models
         public ListBoxCustomDropHandler ListBoxCustomDropHandler { get; set; } = new ListBoxCustomDropHandler();
 
         public IDropTarget NestedDropHandler { get; set; } = new NestedDropHandler();
+
+        public IDropTarget HighlightDropHandler { get; set; } = new DefaultHintDropHandler();
     }
 }

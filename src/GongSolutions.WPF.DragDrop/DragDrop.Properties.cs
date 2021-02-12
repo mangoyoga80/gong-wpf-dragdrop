@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -6,6 +7,9 @@ using System.Windows.Media;
 
 namespace GongSolutions.Wpf.DragDrop
 {
+    using System.Collections.Generic;
+    using System.Linq;
+
     public static partial class DragDrop
     {
         /// <summary>
@@ -360,7 +364,8 @@ namespace GongSolutions.Wpf.DragDrop
         public static readonly DependencyProperty DropHandlerProperty
             = DependencyProperty.RegisterAttached("DropHandler",
                                                   typeof(IDropTarget),
-                                                  typeof(DragDrop));
+                                                  typeof(DragDrop), 
+                                                  new PropertyMetadata(null, OnDropHandlerChanged));
 
         /// <summary>
         /// Gets the handler for the drop action.
@@ -376,6 +381,66 @@ namespace GongSolutions.Wpf.DragDrop
         public static void SetDropHandler(UIElement target, IDropTarget value)
         {
             target.SetValue(DropHandlerProperty, value);
+        }
+
+        private static void OnDropHandlerChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is UIElement element)
+            {
+                OnDropHandlerChanged(element, (IDropTarget)e.OldValue, (IDropTarget)e.NewValue);
+            }
+        }
+
+        /// <summary>
+        /// Holds weak references to targets that has a handler that is of type <see cref="IHintDropTarget"/>.
+        /// </summary>
+        private static readonly List<HintTargetElementWrapper> _hintDropZones = new List<HintTargetElementWrapper>();
+
+        /// <summary>
+        /// Maintain weak reference to <paramref name="element"/> where the DropHandler is of type <see cref="IHintDropTarget"/>.
+        /// </summary>
+        /// <param name="element">The element where <see cref="IDropHandler"/> is being changed.</param>
+        /// <param name="oldValue">The previous value.</param>
+        /// <param name="newValue">New value.</param>
+        private static void OnDropHandlerChanged(UIElement element, IDropTarget oldValue, IDropTarget newValue)
+        {
+            if(oldValue is IHintDropTarget)
+            {
+                var deadReferences = _hintDropZones.Where(wr => wr.TryGetTarget(out var target) && ReferenceEquals(target, element)).ToList();
+                foreach (var item in deadReferences)
+                {
+                    item.Dispose();
+                    _hintDropZones.Remove(item);
+                }
+            }
+
+            if (!(newValue is IHintDropTarget))
+            {
+                return;
+            }
+
+            var wrapper = new HintTargetElementWrapper(element, OnDropTargetVisibilityChanged);
+            _hintDropZones.Add(wrapper);
+        }
+
+        private static void OnDropTargetVisibilityChanged(object sender, EventArgs eventArgs)
+        {
+            if (!(sender is UIElement uiElement))
+            {
+                return;
+            }
+            if(!m_DragInProgress)
+            {
+                return;
+            }
+            if (uiElement.IsVisible)
+            {
+                AddHintAdorner(m_DragInfo, uiElement);
+            }
+            else
+            {
+                RemoveHintAdorner(uiElement);
+            }
         }
 
         /// <summary>
